@@ -2,11 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { ActionCoordinator, BridgeError, ConfirmationStore, ObservationStore, withReadRetry } from "../core/index.js";
+import { ActionCoordinator, AuditLogger, BridgeError, ConfirmationStore, ObservationStore, withReadRetry } from "../core/index.js";
 import type { BridgeServices } from "./app.js";
 import * as schemas from "./tool-schemas.js";
 
-export function registerTools(server: McpServer, services: BridgeServices): void {
+export function registerTools(server: McpServer, services: BridgeServices, audit: AuditLogger): void {
   const coordinator = new ActionCoordinator(new ObservationStore());
   const confirmations = new ConfirmationStore();
 
@@ -14,144 +14,160 @@ export function registerTools(server: McpServer, services: BridgeServices): void
     title: "Check Frobb readiness",
     description: "Check whether the Frobb Bridge, Tandem Browser, Cua Driver, and macOS permissions are ready.",
     inputSchema: schemas.emptyInput,
+    outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
-  }, async () => result(await health(services), "Checked Frobb browser and computer readiness."));
+  }, audited(audit, "frobb_health", "bridge", async () => result(await health(services), "Checked Frobb browser and computer readiness.")));
 
   server.registerTool("browser_tabs", {
     title: "List browser tabs",
     description: "List Tandem Browser tabs before choosing a browser target.",
     inputSchema: schemas.emptyInput,
+    outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
-  }, async () => {
+  }, audited(audit, "browser_tabs", "browser", async () => {
     const data = await withReadRetry(() => services.tandem.tabs());
     return result(data, `Found ${data.tabs.length} Tandem tab${data.tabs.length === 1 ? "" : "s"}.`);
-  });
+  }));
 
   server.registerTool("browser_open", {
     title: "Open in Tandem",
     description: "Open a URL in Tandem Browser. This does not submit, purchase, publish, delete, or send anything.",
     inputSchema: schemas.browserOpenInput,
+    outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(true),
-  }, async ({ url, focus }) => result(await services.tandem.open(url, focus), "Opened the URL in Tandem Browser."));
+  }, audited(audit, "browser_open", "browser", async ({ url, focus }) => result(await services.tandem.open(url, focus), "Opened the URL in Tandem Browser.")));
 
   server.registerTool("browser_observe", {
     title: "Observe browser page",
     description: "Get a fresh semantic page snapshot immediately before a browser action.",
     inputSchema: schemas.browserObserveInput,
+    outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
-  }, async ({ tabId }) => {
+  }, audited(audit, "browser_observe", "browser", async ({ tabId }) => {
     const target = browserTarget(tabId);
     const observed = await coordinator.observe("tandem", target, async () => {
       const data = await withReadRetry(() => services.tandem.snapshot(tabId));
       return { revision: revision(data), data };
     });
     return result(observed, "Observed the current Tandem page. Use this observation once and promptly.");
-  });
+  }));
 
   server.registerTool("browser_click", {
     title: "Click browser element",
     description: "Click a reversible browser element from a fresh observation. For send, publish, purchase, delete, submit, upload, permission, or disclosure actions use prepare_action and execute_action instead.",
     inputSchema: schemas.browserClickInput,
+    outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(true),
-  }, async ({ observationId, tabId, ref }) => browserClick(services, coordinator, { observationId, tabId, ref }));
+  }, audited(audit, "browser_click", "browser", async ({ observationId, tabId, ref }) => browserClick(services, coordinator, { observationId, tabId, ref })));
 
   server.registerTool("browser_type", {
     title: "Type into browser field",
     description: "Type into an unsent browser field from a fresh observation. For consequential entry or disclosure use prepare_action and execute_action.",
     inputSchema: schemas.browserTypeInput,
+    outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(true),
-  }, async ({ observationId, tabId, ref, text }) => browserType(services, coordinator, { observationId, tabId, ref, text }));
+  }, audited(audit, "browser_type", "browser", async ({ observationId, tabId, ref, text }) => browserType(services, coordinator, { observationId, tabId, ref, text })));
 
   server.registerTool("browser_scroll", {
     title: "Scroll browser page",
     description: "Scroll a Tandem page from a fresh observation and verify the resulting page state.",
     inputSchema: schemas.browserScrollInput,
+    outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(true),
-  }, async ({ observationId, tabId, direction, amount }) => {
+  }, audited(audit, "browser_scroll", "browser", async ({ observationId, tabId, direction, amount }) => {
     const target = browserTarget(tabId);
     const data = await coordinator.act({ observationId, backend: "tandem", target, action: () => services.tandem.scroll(direction, amount), verify: async () => {
       const snapshot = await services.tandem.snapshot(tabId);
       return { revision: revision(snapshot), data: snapshot };
     } });
     return result(data, "Scrolled and verified the Tandem page.");
-  });
+  }));
 
   server.registerTool("computer_apps", {
     title: "List running apps",
     description: "List running macOS apps through Cua Driver without changing foreground focus.",
     inputSchema: schemas.emptyInput,
+    outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
-  }, async () => result(await withReadRetry(() => services.cua.listApps()), "Listed running macOS apps."));
+  }, audited(audit, "computer_apps", "computer", async () => result(await withReadRetry(() => services.cua.listApps()), "Listed running macOS apps.")));
 
   server.registerTool("computer_windows", {
     title: "List app windows",
     description: "List windows for a macOS app process before selecting a computer target.",
     inputSchema: schemas.computerWindowsInput,
+    outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
-  }, async ({ pid }) => result(await withReadRetry(() => services.cua.listWindows(pid)), `Listed windows for process ${pid}.`));
+  }, audited(audit, "computer_windows", "computer", async ({ pid }) => result(await withReadRetry(() => services.cua.listWindows(pid)), `Listed windows for process ${pid}.`)));
 
   server.registerTool("computer_launch", {
     title: "Launch macOS app",
     description: "Launch a macOS app by bundle identifier using Cua Driver's focus-preserving launch path.",
     inputSchema: schemas.computerLaunchInput,
+    outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(false),
-  }, async ({ bundleId, urls }) => result(await services.cua.call("launch_app", { bundle_id: bundleId, ...(urls ? { urls } : {}) }), "Launched the app without intentionally stealing focus."));
+  }, audited(audit, "computer_launch", "computer", async ({ bundleId, urls }) => result(await services.cua.call("launch_app", { bundle_id: bundleId, ...(urls ? { urls } : {}) }), "Launched the app without intentionally stealing focus.")));
 
   server.registerTool("computer_observe", {
     title: "Observe app window",
     description: "Get a fresh accessibility snapshot for one macOS window immediately before a computer action.",
     inputSchema: schemas.computerObserveInput,
+    outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
-  }, async ({ pid, windowId }) => {
+  }, audited(audit, "computer_observe", "computer", async ({ pid, windowId }) => {
     const target = computerTarget(pid, windowId);
     const observed = await coordinator.observe("cua", target, async () => {
       const raw = await withReadRetry(() => services.cua.observe(pid, windowId));
       return { revision: revision(raw), data: sanitizeObservation(raw) };
     });
     return result(observed, "Observed the selected macOS window. Use this observation once and promptly.");
-  });
+  }));
 
   server.registerTool("computer_click", {
     title: "Click app element",
     description: "Click a reversible native element from a fresh window observation without moving the user's cursor. Use prepare_action for consequential clicks.",
     inputSchema: schemas.computerClickInput,
+    outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(false),
-  }, async (args) => computerClick(services, coordinator, args));
+  }, audited(audit, "computer_click", "computer", async (args) => computerClick(services, coordinator, args)));
 
   server.registerTool("computer_type", {
     title: "Type into app",
     description: "Type into an unsent native field from a fresh window observation. Use prepare_action for consequential entry or disclosure.",
     inputSchema: schemas.computerTypeInput,
+    outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(false),
-  }, async (args) => computerType(services, coordinator, args));
+  }, audited(audit, "computer_type", "computer", async (args) => computerType(services, coordinator, args)));
 
   server.registerTool("computer_scroll", {
     title: "Scroll app window",
     description: "Scroll a selected macOS window from a fresh observation and verify it afterward.",
     inputSchema: schemas.computerScrollInput,
+    outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(false),
-  }, async ({ observationId, pid, windowId, deltaY }) => {
+  }, audited(audit, "computer_scroll", "computer", async ({ observationId, pid, windowId, deltaY }) => {
     const target = computerTarget(pid, windowId);
     const data = await coordinator.act({ observationId, backend: "cua", target, action: () => services.cua.call("scroll", { pid, window_id: windowId, delta_y: deltaY }), verify: async () => {
       const observed = await services.cua.observe(pid, windowId);
       return { revision: revision(observed), data: sanitizeObservation(observed) };
     } });
     return result(data, "Scrolled and verified the macOS window.");
-  });
+  }));
 
   server.registerTool("prepare_action", {
     title: "Prepare consequential action",
     description: "Prepare an exact send, publish, purchase, delete, submit, upload, permission, or sensitive-disclosure action for explicit human confirmation. Does not execute it.",
     inputSchema: schemas.prepareActionInput,
+    outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
-  }, async ({ summary, action }) => result(confirmations.prepare(action, summary), `Confirmation required: ${summary}`));
+  }, audited(audit, "prepare_action", "bridge", async ({ summary, action }) => result(confirmations.prepare(action, summary), `Confirmation required: ${summary}`)));
 
   server.registerTool("execute_action", {
     title: "Execute confirmed action",
     description: "Execute exactly one consequential action only after the human explicitly approved the prepared summary.",
     inputSchema: schemas.executeActionInput,
+    outputSchema: schemas.commonOutput,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-  }, async ({ token, action }) => {
+  }, audited(audit, "execute_action", "bridge", async ({ token, action }) => {
     confirmations.consume(token, action);
     switch (action.kind) {
       case "browser_click": return browserClick(services, coordinator, action);
@@ -159,7 +175,7 @@ export function registerTools(server: McpServer, services: BridgeServices): void
       case "computer_click": return computerClick(services, coordinator, action);
       case "computer_type": return computerType(services, coordinator, action);
     }
-  });
+  }));
 }
 
 async function browserClick(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string }) {
@@ -206,6 +222,51 @@ async function health(services: BridgeServices): Promise<Record<string, boolean>
 
 function result(data: Record<string, unknown>, text: string) {
   return { structuredContent: data, content: [{ type: "text" as const, text }] };
+}
+
+type ToolResponse = ReturnType<typeof result> & { isError?: boolean };
+
+function audited<TArgs>(
+  audit: AuditLogger,
+  tool: string,
+  targetClass: "browser" | "computer" | "bridge",
+  handler: (args: TArgs) => Promise<ToolResponse>,
+): (args: TArgs) => Promise<ToolResponse> {
+  return async (args) => {
+    const startedAt = Date.now();
+    const correlationId = randomUUID();
+    try {
+      const response = await handler(args);
+      audit.record({
+        timestamp: startedAt,
+        correlationId,
+        tool,
+        targetClass,
+        resultCode: "OK",
+        durationMs: Date.now() - startedAt,
+      });
+      return {
+        ...response,
+        structuredContent: { ok: true, correlationId, ...response.structuredContent },
+      };
+    } catch (error) {
+      const code = error instanceof BridgeError ? error.code : "INTERNAL_ERROR";
+      const message = error instanceof BridgeError ? error.message : "The Frobb tool call failed";
+      audit.record({
+        timestamp: startedAt,
+        correlationId,
+        tool,
+        targetClass,
+        resultCode: code,
+        durationMs: Date.now() - startedAt,
+      });
+      return {
+        isError: true,
+        structuredContent: { ok: false, correlationId, code, message },
+        content: [{ type: "text", text: `${code}: ${message} (${correlationId})` }],
+      };
+    }
+  };
 }
 
 function readOnlyAnnotations() {

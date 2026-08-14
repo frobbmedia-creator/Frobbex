@@ -3,6 +3,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { expect, it } from "vitest";
 
 import { createBridgeServer, type BridgeServices } from "../../src/server/app.js";
+import { AuditLogger } from "../../src/core/audit.js";
 
 it("observes, acts, and verifies a browser change through MCP", async () => {
   let snapshot = "button Publish @e1";
@@ -13,7 +14,7 @@ it("observes, acts, and verifies a browser change through MCP", async () => {
       return { ok: true };
     },
   });
-  const server = createBridgeServer(services);
+  const server = createBridgeServer(services, { audit: new AuditLogger(() => undefined) });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: "flow-test", version: "1.0.0" });

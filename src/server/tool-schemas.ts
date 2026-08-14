@@ -5,6 +5,10 @@ const pid = z.number().int().positive();
 const windowId = z.number().int().nonnegative();
 
 export const emptyInput = z.object({}).strict();
+export const commonOutput = z.object({
+  ok: z.boolean(),
+  correlationId: z.string().uuid(),
+}).passthrough();
 export const browserOpenInput = z.object({ url: z.string().url(), focus: z.boolean().default(true) }).strict();
 export const browserObserveInput = z.object({ tabId: z.string().min(1).optional() }).strict();
 export const browserClickInput = z.object({ observationId, tabId: z.string().min(1).optional(), ref: z.string().regex(/^@e\d+$/) }).strict();

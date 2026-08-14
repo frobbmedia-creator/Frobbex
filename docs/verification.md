@@ -19,7 +19,7 @@ Result:
 
 - dependency audit: 146 packages installed, 0 reported vulnerabilities
 - TypeScript: clean strict typecheck
-- tests: 24 passed, 0 failed, 1 skipped
+- tests: 25 passed, 0 failed, 1 skipped
 - test files: 10 passed, 0 failed, 1 skipped
 - build: passed
 
@@ -28,13 +28,14 @@ The skipped test is `tests/live/read-only-smoke.test.ts`. It is deliberately gua
 ## Coverage evidence
 
 - MCP discovery: all 16 focused tools listed through a real in-memory MCP client/server transport.
-- MCP metadata: read-only and destructive annotations asserted.
+- MCP metadata: every tool has an output schema; read-only and destructive annotations asserted.
 - MCP validation: unknown tool input rejected before backend dispatch.
 - Browser workflow: a complete `browser_observe` → `browser_click` → post-action verification flow passed through MCP.
 - HTTP: `/health` served from a real temporary loopback listener; non-loopback bind rejected.
 - Tandem adapter: bearer authentication, exact semantic endpoint shapes, and auth error normalization passed.
 - Cua adapter: command allowlist, shell-free invocation, structured result parsing, and secret-safe error behavior passed.
 - Policy: single-use observations, action-bound single-use confirmations, mismatch rejection, read retry cap, redacted auditing, and unverified-action failure passed.
+- Operability: successful MCP results include correlation IDs, failures normalize codes, and each handled tool call emits one metadata-only audit event.
 - Setup: consolidated readiness reporting and optional tunnel behavior passed.
 - CLI regression: `npm run doctor` executes without the `tsx` CLI IPC socket and reaches Frobb readiness checks.
 

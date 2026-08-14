@@ -3,6 +3,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createBridgeServer, type BridgeServices } from "../../src/server/app.js";
+import { AuditLogger } from "../../src/core/audit.js";
 
 const EXPECTED_TOOL_NAMES = [
   "frobb_health",
@@ -41,6 +42,7 @@ describe("Frobb MCP tools", () => {
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES.sort());
     expect(tools.tools.find((tool) => tool.name === "browser_observe")?.annotations?.readOnlyHint).toBe(true);
     expect(tools.tools.find((tool) => tool.name === "execute_action")?.annotations?.destructiveHint).toBe(true);
+    expect(tools.tools.every((tool) => tool.outputSchema !== undefined)).toBe(true);
   });
 
   it("returns model-readable and structured browser tab results", async () => {
@@ -48,8 +50,37 @@ describe("Frobb MCP tools", () => {
 
     const result = await client.callTool({ name: "browser_tabs", arguments: {} });
 
-    expect(result.structuredContent).toEqual({ tabs: [{ id: "tab-1", title: "Frobb" }], groups: [] });
+    expect(result.structuredContent).toMatchObject({
+      ok: true,
+      correlationId: expect.any(String),
+      tabs: [{ id: "tab-1", title: "Frobb" }],
+      groups: [],
+    });
     expect(result.content).toEqual([{ type: "text", text: "Found 1 Tandem tab." }]);
+  });
+
+  it("writes one redacted audit event for a tool call", async () => {
+    const events: unknown[] = [];
+    const server = createBridgeServer(createFakeServices(), {
+      audit: new AuditLogger((event) => events.push(event)),
+    });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: "audit-test", version: "1.0.0" });
+    await client.connect(clientTransport);
+    connected.push({ client, closeServer: () => server.close() });
+
+    await client.callTool({ name: "browser_tabs", arguments: {} });
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        tool: "browser_tabs",
+        targetClass: "browser",
+        resultCode: "OK",
+        correlationId: expect.any(String),
+      }),
+    ]);
+    expect(JSON.stringify(events)).not.toContain("tab-1");
   });
 
   it("rejects arbitrary fields before reaching a browser action", async () => {
@@ -65,7 +96,7 @@ describe("Frobb MCP tools", () => {
 });
 
 async function connect(services: BridgeServices): Promise<Client> {
-  const server = createBridgeServer(services);
+  const server = createBridgeServer(services, { audit: new AuditLogger(() => undefined) });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: "frobb-test", version: "1.0.0" });
