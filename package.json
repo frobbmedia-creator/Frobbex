@@ -11,9 +11,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "verify": "npm run typecheck && npm test",
-    "dev": "tsx src/index.ts",
-    "setup": "tsx src/setup/cli.ts --write-config",
-    "doctor": "tsx src/setup/cli.ts"
+    "dev": "node --import tsx src/index.ts",
+    "setup": "node --import tsx src/setup/cli.ts --write-config",
+    "doctor": "node --import tsx src/setup/cli.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.3",
