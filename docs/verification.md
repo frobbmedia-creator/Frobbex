@@ -1,8 +1,8 @@
 # Frobb Bridge Verification
 
-**Date:** 2026-08-14  
-**Branch:** `feat/frobb-bridge-mvp`  
-**Node:** `v22.22.1`  
+**Date:** 2026-08-14
+**Branch:** `feat/frobb-bridge-mvp`
+**Node:** `v22.22.1`
 **npm:** `10.9.4`
 
 ## Automated gate

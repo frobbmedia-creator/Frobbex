@@ -76,7 +76,7 @@ export function registerTools(server: McpServer, services: BridgeServices, audit
     annotations: reversibleAnnotations(true),
   }, audited(audit, "browser_scroll", "browser", async ({ observationId, tabId, direction, amount }) => {
     const target = browserTarget(tabId);
-    const data = await coordinator.act({ observationId, backend: "tandem", target, action: () => services.tandem.scroll(direction, amount), verify: async () => {
+    const data = await coordinator.act({ observationId, backend: "tandem", target, action: () => services.tandem.scroll(direction, amount), refresh: () => browserSnapshot(services, tabId), verify: async () => {
       const snapshot = await services.tandem.snapshot(tabId);
       return { revision: revision(snapshot), data: snapshot };
     } });
@@ -146,7 +146,7 @@ export function registerTools(server: McpServer, services: BridgeServices, audit
     annotations: reversibleAnnotations(false),
   }, audited(audit, "computer_scroll", "computer", async ({ observationId, pid, windowId, deltaY }) => {
     const target = computerTarget(pid, windowId);
-    const data = await coordinator.act({ observationId, backend: "cua", target, action: () => services.cua.call("scroll", { pid, window_id: windowId, delta_y: deltaY }), verify: async () => {
+    const data = await coordinator.act({ observationId, backend: "cua", target, action: () => services.cua.call("scroll", { pid, window_id: windowId, delta_y: deltaY }), refresh: () => computerSnapshot(services, pid, windowId), verify: async () => {
       const observed = await services.cua.observe(pid, windowId);
       return { revision: revision(observed), data: sanitizeObservation(observed) };
     } });
@@ -180,7 +180,7 @@ export function registerTools(server: McpServer, services: BridgeServices, audit
 
 async function browserClick(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string }) {
   const target = browserTarget(args.tabId);
-  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.click(args.ref), verify: async () => {
+  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.click(args.ref), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
     const snapshot = await services.tandem.snapshot(args.tabId);
     return { revision: revision(snapshot), data: snapshot };
   } });
@@ -189,7 +189,7 @@ async function browserClick(services: BridgeServices, coordinator: ActionCoordin
 
 async function browserType(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string; text: string }) {
   const target = browserTarget(args.tabId);
-  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.type(args.ref, args.text), verify: async () => {
+  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.type(args.ref, args.text), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
     const snapshot = await services.tandem.snapshot(args.tabId);
     return { revision: revision(snapshot), data: { count: snapshot.count, url: snapshot.url } };
   } });
@@ -199,7 +199,7 @@ async function browserType(services: BridgeServices, coordinator: ActionCoordina
 async function computerClick(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; pid: number; windowId: number; elementIndex?: number | undefined; x?: number | undefined; y?: number | undefined }) {
   const target = computerTarget(args.pid, args.windowId);
   const actionArgs = { pid: args.pid, window_id: args.windowId, ...(args.elementIndex !== undefined ? { element_index: args.elementIndex } : { x: args.x, y: args.y }) };
-  const data = await coordinator.act({ observationId: args.observationId, backend: "cua", target, action: () => services.cua.call("click", actionArgs), verify: async () => {
+  const data = await coordinator.act({ observationId: args.observationId, backend: "cua", target, action: () => services.cua.call("click", actionArgs), refresh: () => computerSnapshot(services, args.pid, args.windowId), verify: async () => {
     const observed = await services.cua.observe(args.pid, args.windowId);
     return { revision: revision(observed), data: sanitizeObservation(observed) };
   } });
@@ -208,7 +208,7 @@ async function computerClick(services: BridgeServices, coordinator: ActionCoordi
 
 async function computerType(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; pid: number; windowId: number; text: string }) {
   const target = computerTarget(args.pid, args.windowId);
-  const data = await coordinator.act({ observationId: args.observationId, backend: "cua", target, action: () => services.cua.call("type_text", { pid: args.pid, text: args.text }), verify: async () => {
+  const data = await coordinator.act({ observationId: args.observationId, backend: "cua", target, action: () => services.cua.call("type_text", { pid: args.pid, text: args.text }), refresh: () => computerSnapshot(services, args.pid, args.windowId), verify: async () => {
     const observed = await services.cua.observe(args.pid, args.windowId);
     return { revision: revision(observed), data: { has_screenshot: observed.has_screenshot === true } };
   } });
@@ -262,7 +262,7 @@ function audited<TArgs>(
       });
       return {
         isError: true,
-        structuredContent: { ok: false, correlationId, code, message },
+        structuredContent: { ok: false, correlationId, code, message, ...(error instanceof BridgeError && error.details !== undefined ? { details: error.details } : {}) },
         content: [{ type: "text", text: `${code}: ${message} (${correlationId})` }],
       };
     }
@@ -280,6 +280,16 @@ function reversibleAnnotations(openWorldHint: boolean) {
 function browserTarget(tabId?: string): string { return `tab:${tabId ?? "active"}`; }
 function computerTarget(pid: number, windowId: number): string { return `${pid}:${windowId}`; }
 function revision(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
+
+async function browserSnapshot(services: BridgeServices, tabId?: string) {
+  const data = await withReadRetry(() => services.tandem.snapshot(tabId));
+  return { revision: revision(data), data };
+}
+
+async function computerSnapshot(services: BridgeServices, pid: number, windowId: number) {
+  const raw = await withReadRetry(() => services.cua.observe(pid, windowId));
+  return { revision: revision(raw), data: sanitizeObservation(raw) };
+}
 
 function sanitizeObservation(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !/(?:png|base64|screenshot_(?:data|bytes))/i.test(key)));

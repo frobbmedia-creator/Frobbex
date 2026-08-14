@@ -43,4 +43,44 @@ describe("ActionCoordinator", () => {
       }),
     ).rejects.toMatchObject({ code: "ACTION_UNVERIFIED" });
   });
+
+  it("refreshes an expired observation once without replaying the action", async () => {
+    let now = 1_000;
+    const store = new ObservationStore({ now: () => now, ttlMs: 10 });
+    const coordinator = new ActionCoordinator(store);
+    const observed = await coordinator.observe("tandem", "tab:1", async () => ({
+      revision: "old",
+      data: { snapshot: "old" },
+    }));
+    now = 1_011;
+    let actions = 0;
+    let refreshes = 0;
+
+    await expect(
+      coordinator.act({
+        observationId: observed.observation.id,
+        backend: "tandem",
+        target: "tab:1",
+        action: async () => {
+          actions += 1;
+          return { ok: true };
+        },
+        verify: async () => ({ revision: "after", data: {} }),
+        refresh: async () => {
+          refreshes += 1;
+          return { revision: "fresh", data: { snapshot: "fresh" } };
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "STALE_OBSERVATION",
+      details: {
+        refreshed: expect.objectContaining({
+          observation: expect.objectContaining({ revision: "fresh" }),
+          data: { snapshot: "fresh" },
+        }),
+      },
+    });
+    expect(actions).toBe(0);
+    expect(refreshes).toBe(1);
+  });
 });

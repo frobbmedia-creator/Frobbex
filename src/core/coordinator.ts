@@ -13,6 +13,7 @@ interface ActOptions<TAction, TVerification> {
   target: string;
   action: () => Promise<TAction>;
   verify: () => Promise<Observed<TVerification>>;
+  refresh?: () => Promise<Observed<unknown>>;
 }
 
 export class ActionCoordinator {
@@ -37,7 +38,20 @@ export class ActionCoordinator {
     beforeRevision: string;
     afterRevision: string;
   }> {
-    const before = this.observations.consume(options.observationId, options.backend, options.target);
+    let before: ObservationHandle;
+    try {
+      before = this.observations.consume(options.observationId, options.backend, options.target);
+    } catch (error) {
+      if (!(error instanceof BridgeError) || error.code !== "STALE_OBSERVATION" || !options.refresh) {
+        throw error;
+      }
+      const refreshed = await this.observe(options.backend, options.target, options.refresh);
+      throw new BridgeError(
+        "STALE_OBSERVATION",
+        "The observation was stale; retry with the refreshed observation",
+        { refreshed },
+      );
+    }
     const action = await options.action();
     const after = await options.verify();
     if (after.revision === before.revision) {
