@@ -6,9 +6,19 @@ import { ActionCoordinator, AuditLogger, BridgeError, ConfirmationStore, Observa
 import type { BridgeServices } from "./app.js";
 import * as schemas from "./tool-schemas.js";
 
-export function registerTools(server: McpServer, services: BridgeServices, audit: AuditLogger): void {
-  const coordinator = new ActionCoordinator(new ObservationStore());
-  const confirmations = new ConfirmationStore();
+export interface BridgePolicy {
+  observations: ObservationStore;
+  confirmations: ConfirmationStore;
+  audit: AuditLogger;
+}
+
+export function registerTools(
+  server: McpServer,
+  services: BridgeServices,
+  policy: BridgePolicy,
+): void {
+  const { observations, confirmations, audit } = policy;
+  const coordinator = new ActionCoordinator(observations);
 
   server.registerTool("frobb_health", {
     title: "Check Frobb readiness",
