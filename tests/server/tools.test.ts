@@ -2,8 +2,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { AuditLogger, ConfirmationStore, ObservationStore } from "../../src/core/index.js";
 import { createBridgeServer, type BridgeServices } from "../../src/server/app.js";
-import { AuditLogger } from "../../src/core/audit.js";
 
 const EXPECTED_TOOL_NAMES = [
   "frobb_health",
@@ -61,9 +61,12 @@ describe("Frobb MCP tools", () => {
 
   it("writes one redacted audit event for a tool call", async () => {
     const events: unknown[] = [];
-    const server = createBridgeServer(createFakeServices(), {
+    const policy = {
+      observations: new ObservationStore(),
+      confirmations: new ConfirmationStore(),
       audit: new AuditLogger((event) => events.push(event)),
-    });
+    };
+    const server = createBridgeServer(createFakeServices(), policy);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     const client = new Client({ name: "audit-test", version: "1.0.0" });
@@ -96,7 +99,12 @@ describe("Frobb MCP tools", () => {
 });
 
 async function connect(services: BridgeServices): Promise<Client> {
-  const server = createBridgeServer(services, { audit: new AuditLogger(() => undefined) });
+  const policy = {
+    observations: new ObservationStore(),
+    confirmations: new ConfirmationStore(),
+    audit: new AuditLogger(() => undefined),
+  };
+  const server = createBridgeServer(services, policy);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: "frobb-test", version: "1.0.0" });

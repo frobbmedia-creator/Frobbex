@@ -2,8 +2,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { expect, it } from "vitest";
 
+import { AuditLogger, ConfirmationStore, ObservationStore } from "../../src/core/index.js";
 import { createBridgeServer, type BridgeServices } from "../../src/server/app.js";
-import { AuditLogger } from "../../src/core/audit.js";
 
 it("observes, acts, and verifies a browser change through MCP", async () => {
   let snapshot = "button Publish @e1";
@@ -14,7 +14,12 @@ it("observes, acts, and verifies a browser change through MCP", async () => {
       return { ok: true };
     },
   });
-  const server = createBridgeServer(services, { audit: new AuditLogger(() => undefined) });
+  const policy = {
+    observations: new ObservationStore(),
+    confirmations: new ConfirmationStore(),
+    audit: new AuditLogger(() => undefined),
+  };
+  const server = createBridgeServer(services, policy);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: "flow-test", version: "1.0.0" });
