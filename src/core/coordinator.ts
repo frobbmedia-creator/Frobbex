@@ -52,6 +52,20 @@ export class ActionCoordinator {
         { refreshed },
       );
     }
+    if (options.refresh) {
+      const current = await options.refresh();
+      if (current.revision !== before.revision) {
+        const refreshed = {
+          observation: this.observations.issue(options.backend, options.target, current.revision),
+          data: current.data,
+        };
+        throw new BridgeError(
+          "STALE_OBSERVATION",
+          "The target changed after it was observed; inspect the refreshed observation before acting",
+          { refreshed },
+        );
+      }
+    }
     const action = await options.action();
     const after = await options.verify();
     if (after.revision === before.revision) {

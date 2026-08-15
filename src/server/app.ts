@@ -17,9 +17,9 @@ export interface BridgeServices {
     tabs(): Promise<{ tabs: JsonObject[]; groups: JsonObject[] }>;
     open(url: string, focus?: boolean): Promise<JsonObject>;
     snapshot(tabId?: string): Promise<JsonObject>;
-    click(ref: string): Promise<JsonObject>;
-    type(ref: string, value: string): Promise<JsonObject>;
-    scroll(direction: "up" | "down", amount: number): Promise<JsonObject>;
+    click(tabId: string | undefined, ref: string, confirmed?: boolean): Promise<JsonObject>;
+    type(tabId: string | undefined, ref: string, value: string, confirmed?: boolean): Promise<JsonObject>;
+    scroll(tabId: string | undefined, direction: "up" | "down", amount: number): Promise<JsonObject>;
   };
   cua: {
     status(): Promise<JsonObject>;

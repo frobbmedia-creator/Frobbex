@@ -86,7 +86,7 @@ export function registerTools(
     annotations: reversibleAnnotations(true),
   }, audited(audit, "browser_scroll", "browser", async ({ observationId, tabId, direction, amount }) => {
     const target = browserTarget(tabId);
-    const data = await coordinator.act({ observationId, backend: "tandem", target, action: () => services.tandem.scroll(direction, amount), refresh: () => browserSnapshot(services, tabId), verify: async () => {
+    const data = await coordinator.act({ observationId, backend: "tandem", target, action: () => services.tandem.scroll(tabId, direction, amount), refresh: () => browserSnapshot(services, tabId), verify: async () => {
       const snapshot = await services.tandem.snapshot(tabId);
       return { revision: revision(snapshot), data: snapshot };
     } });
@@ -180,26 +180,26 @@ export function registerTools(
   }, audited(audit, "execute_action", "bridge", async ({ token, action }) => {
     confirmations.consume(token, action);
     switch (action.kind) {
-      case "browser_click": return browserClick(services, coordinator, action);
-      case "browser_type": return browserType(services, coordinator, action);
+      case "browser_click": return browserClick(services, coordinator, action, true);
+      case "browser_type": return browserType(services, coordinator, action, true);
       case "computer_click": return computerClick(services, coordinator, action);
       case "computer_type": return computerType(services, coordinator, action);
     }
   }));
 }
 
-async function browserClick(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string }) {
+async function browserClick(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string }, confirmed = false) {
   const target = browserTarget(args.tabId);
-  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.click(args.ref), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
+  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.click(args.tabId, args.ref, confirmed), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
     const snapshot = await services.tandem.snapshot(args.tabId);
     return { revision: revision(snapshot), data: snapshot };
   } });
   return result(data, "Clicked and verified the Tandem element.");
 }
 
-async function browserType(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string; text: string }) {
+async function browserType(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string; text: string }, confirmed = false) {
   const target = browserTarget(args.tabId);
-  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.type(args.ref, args.text), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
+  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.type(args.tabId, args.ref, args.text, confirmed), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
     const snapshot = await services.tandem.snapshot(args.tabId);
     return { revision: revision(snapshot), data: { count: snapshot.count, url: snapshot.url } };
   } });

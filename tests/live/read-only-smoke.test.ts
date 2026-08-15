@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import { CuaAdapter } from "../../src/adapters/cua.js";
-import { TandemAdapter } from "../../src/adapters/tandem.js";
+import { ChromeAdapter } from "../../src/adapters/chrome.js";
+import { ChromeCdpBackend } from "../../src/browser/cdp.js";
+import { ChromeManager } from "../../src/browser/chrome-manager.js";
+import { AuditLogger, ConfirmationStore, ObservationStore } from "../../src/core/index.js";
 import { createBridgeServer } from "../../src/server/app.js";
+import { loadConfig } from "../../src/setup/config.js";
 
 describe.skipIf(process.env.FROBB_LIVE_TEST !== "1")("read-only live smoke", () => {
   it("initializes the MCP server and reaches Tandem and Cua without acting", async () => {
-    const tandem = new TandemAdapter();
+    const manager = new ChromeManager(await loadConfig());
+    const tandem = new ChromeAdapter({ backend: new ChromeCdpBackend(manager) });
     const cua = new CuaAdapter();
-    const server = createBridgeServer({ tandem, cua });
+    const server = createBridgeServer({ tandem, cua }, { observations: new ObservationStore(), confirmations: new ConfirmationStore(), audit: new AuditLogger(() => undefined) });
 
     const status = await tandem.health();
     const tabs = await tandem.tabs();
@@ -18,6 +23,7 @@ describe.skipIf(process.env.FROBB_LIVE_TEST !== "1")("read-only live smoke", () 
     expect(server).toBeDefined();
     expect(status).toBeTypeOf("object");
     expect(tabs.tabs).toBeInstanceOf(Array);
+    if (tabs.tabs.length > 0) expect(await tandem.snapshot(String(tabs.tabs[0]?.id))).toBeTypeOf("object");
     expect(cuaStatus).toBeTypeOf("object");
     expect(apps.apps).toBeInstanceOf(Array);
 
@@ -29,5 +35,6 @@ describe.skipIf(process.env.FROBB_LIVE_TEST !== "1")("read-only live smoke", () 
         expect(await cua.observe(firstPid, firstWindowId)).toBeTypeOf("object");
       }
     }
+    await manager.close();
   });
 });
