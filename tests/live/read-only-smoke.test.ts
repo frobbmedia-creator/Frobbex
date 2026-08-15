@@ -9,7 +9,7 @@ import { createBridgeServer } from "../../src/server/app.js";
 import { loadConfig } from "../../src/setup/config.js";
 
 describe.skipIf(process.env.FROBB_LIVE_TEST !== "1")("read-only live smoke", () => {
-  it("initializes the MCP server and reaches Tandem and Cua without acting", async () => {
+  it("observes the dedicated Frobb Chrome profile without acting", async () => {
     const manager = new ChromeManager(await loadConfig());
     const tandem = new ChromeAdapter({ backend: new ChromeCdpBackend(manager) });
     const cua = new CuaAdapter();

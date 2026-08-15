@@ -65,6 +65,13 @@ The doctor exited `1`, correctly reflecting unmet required runtime prerequisites
 
 ## Live test gate
 
+Reliability-audit evidence on 2026-08-15:
+
+- `npm run verify`: 31 passed, 0 failed, 1 live test skipped by default.
+- `npm run build`: passed.
+- `FROBB_LIVE_TEST=1 npx vitest run tests/live/read-only-smoke.test.ts`: passed against `~/.frobb/chrome-profile`; the test listed and observed the dedicated Chrome target without acting.
+- Cua local source build was attempted but the installed Xcode Command Line Tools cannot resolve the macOS SDK `PlatformPath`. The signed-release installer found no matching published `cua-driver-v*` release. Native tools remain implemented but unavailable until Cua Driver can be installed and TCC permissions granted.
+
 After starting Tandem, installing/starting Cua Driver, and granting its two macOS permissions, run:
 
 ```bash
