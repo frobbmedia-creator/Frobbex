@@ -1,13 +1,13 @@
 # Frobb Media Bridge
 
-Frobb Bridge is the private ChatGPT plugin backend for frictionless Tandem Browser and macOS computer use. It runs locally, exposes one focused MCP toolset, and routes browser actions to Tandem and native app actions to Cua Driver.
+Frobb Bridge is the private ChatGPT plugin backend for dedicated-profile Chrome and macOS computer use. It runs locally, exposes one focused MCP toolset, routes browser actions through a loopback-only Chrome DevTools endpoint, and routes native app actions to Cua Driver.
 
 ## Requirements
 
 - macOS
 - Node.js 22 or newer
-- Tandem Browser running on `127.0.0.1:8765`
-- `~/.tandem/api-token`
+- Google Chrome at the configured absolute executable path (the standard `/Applications` install works on Intel Macs)
+- A dedicated profile under `~/.frobb` (default: `~/.frobb/chrome-profile`)
 - Cua Driver installed, running, and granted Accessibility plus Screen Recording
 - OpenAI `tunnel-client` and ChatGPT developer mode for the private ChatGPT connection
 
@@ -19,7 +19,7 @@ npm run setup
 npm run doctor
 ```
 
-`setup` writes only non-secret defaults to `~/.frobb/bridge.json`. Neither command installs software, prompts for permissions, launches apps, or changes foreground focus.
+`setup` atomically writes only non-secret defaults to `~/.frobb/bridge.json` with owner-only permissions. Doctor does not launch apps or prompt for permissions. Starting the bridge launches Chrome only with the dedicated Frobb profile, or reconnects to that profile's existing loopback debugging endpoint.
 
 Start the bridge:
 
@@ -55,7 +55,8 @@ Developer mode and tunnel availability depend on account/workspace policy. The o
 ## Safety model
 
 - Observe immediately before each action and verify immediately afterward.
-- Browser actions use Tandem semantic refs and trusted input.
+- Browser actions use semantic refs from the exact observed Chrome target. Omitting `tabId` is accepted only when exactly one controllable page exists.
+- Frobb never attaches to the normal Chrome profile and exposes no arbitrary CDP or JavaScript tool.
 - Native actions use Cua Driver and do not intentionally steal focus.
 - Send, publish, purchase, delete, submit, upload, permission, and sensitive-disclosure actions require `prepare_action` followed by a single-use `execute_action` confirmation.
 - Tandem tokens, authorization headers, entered text, and screenshot bytes are not returned or logged.
@@ -67,7 +68,8 @@ See OpenAI's [MCP server guidance](https://developers.openai.com/plugins/build/m
 
 Run `npm run doctor` first. It reports all missing prerequisites in one pass. Common remediations:
 
-- Start Tandem if `Tandem local API` fails.
+- Check the configured Chrome executable/profile if either Chrome doctor check fails. A stopped debugging endpoint is informational until the bridge starts.
+- If Chrome is restarted, the bridge reconnects to the dedicated profile on the next read. It never retries a write across a disconnect.
 - Install/start Cua Driver if its binary or daemon check fails.
 - Grant Accessibility and Screen Recording to `CuaDriver.app` in System Settings → Privacy & Security.
 - Run `tunnel-client doctor --profile frobb-local --explain` if ChatGPT cannot discover tools.

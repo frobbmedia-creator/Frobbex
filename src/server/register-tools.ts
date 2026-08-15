@@ -30,18 +30,18 @@ export function registerTools(
 
   server.registerTool("browser_tabs", {
     title: "List browser tabs",
-    description: "List Tandem Browser tabs before choosing a browser target.",
+    description: "List dedicated Frobb Chrome tabs before choosing an exact browser target.",
     inputSchema: schemas.emptyInput,
     outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
   }, audited(audit, "browser_tabs", "browser", async () => {
     const data = await withReadRetry(() => services.tandem.tabs());
-    return result(data, `Found ${data.tabs.length} Tandem tab${data.tabs.length === 1 ? "" : "s"}.`);
+    return result(data, `Found ${data.tabs.length} Frobb Chrome tab${data.tabs.length === 1 ? "" : "s"}.`);
   }));
 
   server.registerTool("browser_open", {
     title: "Open in Tandem",
-    description: "Open a URL in Tandem Browser. This does not submit, purchase, publish, delete, or send anything.",
+    description: "Open a URL in the dedicated Frobb Chrome profile. This does not submit, purchase, publish, delete, or send anything.",
     inputSchema: schemas.browserOpenInput,
     outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(true),
@@ -206,9 +206,9 @@ async function browserType(services: BridgeServices, coordinator: ActionCoordina
   return result({ verified: data.verified, beforeRevision: data.beforeRevision, afterRevision: data.afterRevision }, "Typed and verified without returning the entered text.");
 }
 
-async function computerClick(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; pid: number; windowId: number; elementIndex?: number | undefined; x?: number | undefined; y?: number | undefined }) {
+async function computerClick(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; pid: number; windowId: number; elementIndex: number }) {
   const target = computerTarget(args.pid, args.windowId);
-  const actionArgs = { pid: args.pid, window_id: args.windowId, ...(args.elementIndex !== undefined ? { element_index: args.elementIndex } : { x: args.x, y: args.y }) };
+  const actionArgs = { pid: args.pid, window_id: args.windowId, element_index: args.elementIndex };
   const data = await coordinator.act({ observationId: args.observationId, backend: "cua", target, action: () => services.cua.call("click", actionArgs), refresh: () => computerSnapshot(services, args.pid, args.windowId), verify: async () => {
     const observed = await services.cua.observe(args.pid, args.windowId);
     return { revision: revision(observed), data: sanitizeObservation(observed) };
@@ -216,9 +216,9 @@ async function computerClick(services: BridgeServices, coordinator: ActionCoordi
   return result(data, "Clicked and verified the native app element.");
 }
 
-async function computerType(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; pid: number; windowId: number; text: string }) {
+async function computerType(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; pid: number; windowId: number; elementIndex: number; text: string }) {
   const target = computerTarget(args.pid, args.windowId);
-  const data = await coordinator.act({ observationId: args.observationId, backend: "cua", target, action: () => services.cua.call("type_text", { pid: args.pid, text: args.text }), refresh: () => computerSnapshot(services, args.pid, args.windowId), verify: async () => {
+  const data = await coordinator.act({ observationId: args.observationId, backend: "cua", target, action: () => services.cua.call("type_text", { pid: args.pid, window_id: args.windowId, element_index: args.elementIndex, text: args.text }), refresh: () => computerSnapshot(services, args.pid, args.windowId), verify: async () => {
     const observed = await services.cua.observe(args.pid, args.windowId);
     return { revision: revision(observed), data: { has_screenshot: observed.has_screenshot === true } };
   } });
@@ -227,7 +227,8 @@ async function computerType(services: BridgeServices, coordinator: ActionCoordin
 
 async function health(services: BridgeServices): Promise<Record<string, boolean>> {
   const [tandem, cua, permissions] = await Promise.allSettled([services.tandem.health(), services.cua.status(), services.cua.permissions()]);
-  return { bridge: true, tandem: tandem.status === "fulfilled", cua: cua.status === "fulfilled", permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true };
+  const browser = tandem.status === "fulfilled";
+  return { bridge: true, browser, tandem: browser, cua: cua.status === "fulfilled", permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true };
 }
 
 function result(data: Record<string, unknown>, text: string) {

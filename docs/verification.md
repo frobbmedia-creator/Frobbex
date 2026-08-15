@@ -1,7 +1,7 @@
 # Frobb Bridge Verification
 
-**Date:** 2026-08-14
-**Branch:** `feat/frobb-bridge-mvp`
+**Date:** 2026-08-15
+**Branch:** `main`
 **Node:** `v22.22.1`
 **npm:** `10.9.4`
 
@@ -23,7 +23,7 @@ Result:
 - test files: 10 passed, 0 failed, 1 skipped
 - build: passed
 
-The skipped test is `tests/live/read-only-smoke.test.ts`. It is deliberately guarded by `FROBB_LIVE_TEST=1` and was not enabled because the external runtime prerequisites below are not ready.
+The live test is guarded by `FROBB_LIVE_TEST=1`; current evidence is recorded again after the reliability audit rather than relying on the older MVP run below.
 
 ## Coverage evidence
 

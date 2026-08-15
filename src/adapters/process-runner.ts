@@ -22,13 +22,18 @@ export class SpawnProcessRunner implements ProcessRunner {
       const child = spawn(command, args, { shell: false, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
-      const timer = setTimeout(() => child.kill("SIGTERM"), options.timeoutMs);
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGTERM");
+        setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, 1_000).unref();
+      }, options.timeoutMs);
 
       child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
-        stdout += chunk;
+        stdout = appendBounded(stdout, chunk);
       });
       child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
-        stderr += chunk;
+        stderr = appendBounded(stderr, chunk);
       });
       child.once("error", (error: NodeJS.ErrnoException) => {
         clearTimeout(timer);
@@ -41,8 +46,15 @@ export class SpawnProcessRunner implements ProcessRunner {
       });
       child.once("close", (exitCode) => {
         clearTimeout(timer);
-        resolve({ stdout, stderr, exitCode: exitCode ?? 1 });
+        resolve({ stdout, stderr, exitCode: timedOut ? 124 : exitCode ?? 1 });
       });
     });
   }
+}
+
+const MAX_OUTPUT_BYTES = 1_048_576;
+function appendBounded(current: string, chunk: string): string {
+  if (Buffer.byteLength(current) >= MAX_OUTPUT_BYTES) return current;
+  const remaining = MAX_OUTPUT_BYTES - Buffer.byteLength(current);
+  return current + Buffer.from(chunk).subarray(0, remaining).toString("utf8");
 }

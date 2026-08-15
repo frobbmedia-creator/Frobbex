@@ -5,7 +5,7 @@ import { runChecks, type CheckDependencies } from "../../src/setup/checks.js";
 describe("setup checks", () => {
   it("reports every prerequisite in one pass", async () => {
     const dependencies = createDependencies({
-      tandemApi: false,
+      chromeRuntime: false,
       cuaBinary: false,
       accessibility: false,
       screenRecording: false,
@@ -16,8 +16,9 @@ describe("setup checks", () => {
     expect(report.ready).toBe(false);
     expect(report.checks.map((check) => check.id)).toEqual([
       "node",
-      "tandem-token",
-      "tandem-api",
+      "chrome-executable",
+      "chrome-profile",
+      "chrome-runtime",
       "cua-binary",
       "cua-daemon",
       "accessibility",
@@ -42,8 +43,9 @@ function createDependencies(overrides: Partial<Record<keyof CheckDependencies, b
   const value = (key: keyof CheckDependencies) => async () => overrides[key] ?? true;
   return {
     node: value("node"),
-    tandemToken: value("tandemToken"),
-    tandemApi: value("tandemApi"),
+    chromeExecutable: value("chromeExecutable"),
+    chromeProfile: value("chromeProfile"),
+    chromeRuntime: value("chromeRuntime"),
     cuaBinary: value("cuaBinary"),
     cuaDaemon: value("cuaDaemon"),
     accessibility: value("accessibility"),

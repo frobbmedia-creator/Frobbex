@@ -56,7 +56,7 @@ describe("Frobb MCP tools", () => {
       tabs: [{ id: "tab-1", title: "Frobb" }],
       groups: [],
     });
-    expect(result.content).toEqual([{ type: "text", text: "Found 1 Tandem tab." }]);
+    expect(result.content).toEqual([{ type: "text", text: "Found 1 Frobb Chrome tab." }]);
   });
 
   it("writes one redacted audit event for a tool call", async () => {

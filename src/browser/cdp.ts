@@ -115,7 +115,8 @@ function asObject(value: unknown): JsonObject { if (!value || typeof value !== "
 const OBSERVE_EXPRESSION = `(() => {
   const nodes = [...document.querySelectorAll('a,button,input,textarea,select,[role="button"],[role="link"],[contenteditable="true"]')].filter(e => { const r=e.getBoundingClientRect(); return r.width>0&&r.height>0; });
   const lines=[]; const refs={}; nodes.slice(0,500).forEach((e,i)=>{ const ref='@e'+(i+1); e.setAttribute('data-frobb-ref',ref); refs[ref]=e.tagName.toLowerCase(); const label=(e.getAttribute('aria-label')||e.getAttribute('title')||e.textContent||e.getAttribute('placeholder')||'').trim().replace(/\\s+/g,' ').slice(0,200); lines.push(e.tagName.toLowerCase()+' '+label+' '+ref); });
-  return { url:location.href, title:document.title, documentId:location.href+'|'+performance.timeOrigin, snapshot:lines.join('\\n'), count:lines.length, refs };
+  let h=2166136261; nodes.forEach(e=>{ const v=('value' in e?String(e.value):''); for(let i=0;i<v.length;i++){h^=v.charCodeAt(i);h=Math.imul(h,16777619);} });
+  return { url:location.href, title:document.title, documentId:location.href+'|'+performance.timeOrigin, stateDigest:(h>>>0).toString(16), snapshot:lines.join('\\n'), count:lines.length, refs };
 })()`;
 function actionExpression(kind: "click" | "type", ref: string, value?: string, confirmed = false): string {
   const selector = `[data-frobb-ref=${JSON.stringify(ref)}]`;

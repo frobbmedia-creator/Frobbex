@@ -26,7 +26,10 @@ describe("Frobb HTTP app", () => {
     const response = await fetch(`http://127.0.0.1:${address.port}/health`);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ bridge: true, tandem: true, cua: true, permissions: true });
+    expect(await response.json()).toEqual({ bridge: true, browser: true, tandem: true, cua: true, permissions: true });
+
+    const rejected = await fetch(`http://127.0.0.1:${address.port}/health`, { headers: { Origin: "https://evil.example" } });
+    expect(rejected.status).toBe(403);
   });
 
   it("rejects non-loopback bind hosts", () => {

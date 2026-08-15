@@ -59,6 +59,11 @@ export function createHttpApp(services: BridgeServices): RequestListener {
   };
 
   return async (request, response) => {
+    if (!isTrustedLocalRequest(request)) {
+      response.writeHead(403, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "Local requests only" }));
+      return;
+    }
     if (request.url === "/health" && request.method === "GET") {
       await serveHealth(services, response);
       return;
@@ -96,9 +101,21 @@ export function assertLoopbackHost(host: string): void {
 
 async function serveHealth(services: BridgeServices, response: ServerResponse): Promise<void> {
   const [tandem, cua, permissions] = await Promise.allSettled([services.tandem.health(), services.cua.status(), services.cua.permissions()]);
-  const payload = { bridge: true, tandem: tandem.status === "fulfilled", cua: cua.status === "fulfilled", permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true };
+  const browser = tandem.status === "fulfilled";
+  const payload = { bridge: true, browser, tandem: browser, cua: cua.status === "fulfilled", permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true };
   response.writeHead(200, { "content-type": "application/json" });
   response.end(JSON.stringify(payload));
+}
+
+function isTrustedLocalRequest(request: IncomingMessage): boolean {
+  const host = (request.headers.host ?? "").replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+  if (host !== "127.0.0.1" && host !== "::1" && host !== "localhost") return false;
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  try {
+    const hostname = new URL(origin).hostname;
+    return hostname === "127.0.0.1" || hostname === "::1" || hostname === "localhost";
+  } catch { return false; }
 }
 
 async function readJsonBody(request: IncomingMessage, limit: number): Promise<unknown> {
