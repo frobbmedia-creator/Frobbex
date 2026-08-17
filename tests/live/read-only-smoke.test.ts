@@ -34,5 +34,5 @@ describe.skipIf(process.env.FROBB_LIVE_TEST !== "1")("read-only live smoke", () 
       }
     } catch { /* Native validation is reported separately when Cua is unavailable. */ }
     await manager.close();
-  });
+  }, 120_000);
 });

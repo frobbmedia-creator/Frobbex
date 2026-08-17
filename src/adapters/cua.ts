@@ -40,6 +40,7 @@ export class CuaAdapter {
   private readonly runner: ProcessRunner;
   private readonly binary: string;
   private readonly timeoutMs: number;
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(options: CuaAdapterOptions = {}) {
     this.runner = options.runner ?? new SpawnProcessRunner();
@@ -47,32 +48,68 @@ export class CuaAdapter {
     this.timeoutMs = options.timeoutMs ?? 10_000;
   }
 
+  private enqueue<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+    // The cua-driver CLI races on its socket when invoked concurrently
+    // (including across processes, e.g. doctor while the bridge is live);
+    // serialize through a single queue and retry on transient failure.
+    const run = async (left: number): Promise<T> => {
+      try {
+        return await fn();
+      } catch (error) {
+        if (left <= 1 || !(error instanceof BridgeError) || error.code !== "BACKEND_OFFLINE") throw error;
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        return run(left - 1);
+      }
+    };
+    const result = this.queue.then(() => run(attempts), () => run(attempts));
+    this.queue = result.catch(() => undefined);
+    return result;
+  }
+
   async call<T>(tool: CuaTool, args: Record<string, unknown>): Promise<T> {
     if (!CUA_TOOLS.has(tool)) {
       throw new BridgeError("INVALID_INPUT", "Cua tool is not permitted");
     }
 
-    const result = await this.runner.run(this.binary, [tool, JSON.stringify(args)], {
-      timeoutMs: this.timeoutMs,
-    });
-    if (result.exitCode !== 0) {
-      const permissionFailure = /permission|accessibility|screen recording/i.test(result.stderr);
-      throw new BridgeError(
-        permissionFailure ? "PERMISSION_REQUIRED" : "BACKEND_OFFLINE",
-        permissionFailure ? "Cua Driver permissions are required" : "Cua Driver call failed",
-      );
-    }
+    return this.enqueue(async () => {
+      const result = await this.runner.run(this.binary, [tool, JSON.stringify(args)], {
+        timeoutMs: this.timeoutMs,
+      });
+      if (result.exitCode !== 0) {
+        const permissionFailure = /permission|accessibility|screen recording/i.test(result.stderr);
+        throw new BridgeError(
+          permissionFailure ? "PERMISSION_REQUIRED" : "BACKEND_OFFLINE",
+          permissionFailure ? "Cua Driver permissions are required" : "Cua Driver call failed",
+        );
+      }
 
-    try {
-      const parsed = JSON.parse(result.stdout) as { structuredContent?: T } & T;
-      return parsed.structuredContent ?? parsed;
-    } catch {
-      throw new BridgeError("INTERNAL_ERROR", "Cua Driver returned malformed JSON");
-    }
+      try {
+        const parsed = JSON.parse(result.stdout) as { structuredContent?: T } & T;
+        return parsed.structuredContent ?? parsed;
+      } catch {
+        throw new BridgeError("INTERNAL_ERROR", "Cua Driver returned malformed JSON");
+      }
+    });
   }
 
-  status(): Promise<Record<string, unknown>> {
-    return this.call("status", {});
+  async status(): Promise<Record<string, unknown>> {
+    // The nightly cua-driver CLI prints human-readable status text for `status`,
+    // not JSON. Treat "daemon is running" as a healthy signal.
+    return this.enqueue(async () => {
+      const result = await this.runner.run(this.binary, ["status", JSON.stringify({})], {
+        timeoutMs: this.timeoutMs,
+      });
+      if (result.exitCode !== 0) {
+        throw new BridgeError("BACKEND_OFFLINE", "Cua Driver call failed");
+      }
+      try {
+        const parsed = JSON.parse(result.stdout) as { structuredContent?: Record<string, unknown> } & Record<string, unknown>;
+        return parsed.structuredContent ?? parsed;
+      } catch {
+        if (/daemon is running/i.test(result.stdout)) return { daemon: true };
+        throw new BridgeError("INTERNAL_ERROR", "Cua Driver returned malformed JSON");
+      }
+    });
   }
 
   permissions(): Promise<Record<string, unknown>> {

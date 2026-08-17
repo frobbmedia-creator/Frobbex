@@ -99,12 +99,37 @@ export function assertLoopbackHost(host: string): void {
   }
 }
 
+let healthCache: { at: number; payload: Record<string, unknown> } | undefined;
+let healthRefresh: Promise<void> | undefined;
+const HEALTH_TTL_MS = 3_000;
+
+function computeHealth(services: BridgeServices): Promise<Record<string, unknown>> {
+  return Promise.allSettled([services.tandem.health(), services.cua.status(), services.cua.permissions()]).then(([tandem, cua, permissions]) => {
+    const browser = tandem.status === "fulfilled";
+    return { bridge: true, browser, tandem: browser, cua: cua.status === "fulfilled", permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true };
+  });
+}
+
 async function serveHealth(services: BridgeServices, response: ServerResponse): Promise<void> {
-  const [tandem, cua, permissions] = await Promise.allSettled([services.tandem.health(), services.cua.status(), services.cua.permissions()]);
-  const browser = tandem.status === "fulfilled";
-  const payload = { bridge: true, browser, tandem: browser, cua: cua.status === "fulfilled", permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true };
+  // The cua checks spawn serialized CLI processes (several seconds); doctor's
+  // own 1s port probe needs an instant answer. Stale-while-revalidate: any
+  // cached payload answers immediately while a stale cache refreshes in the
+  // background. State here (daemon up, permissions) never flips silently.
+  const refresh = () => {
+    healthRefresh ??= computeHealth(services)
+      .then((payload) => { healthCache = { at: Date.now(), payload }; })
+      .finally(() => { healthRefresh = undefined; });
+  };
+  if (!healthCache || Date.now() - healthCache.at >= HEALTH_TTL_MS) refresh();
+  if (healthCache) {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify(healthCache.payload));
+    return;
+  }
+  await healthRefresh;
+  const refreshed = healthCache as { at: number; payload: Record<string, unknown> } | undefined;
   response.writeHead(200, { "content-type": "application/json" });
-  response.end(JSON.stringify(payload));
+  response.end(JSON.stringify(refreshed?.payload ?? { bridge: true, browser: false, tandem: false, cua: false, permissions: false }));
 }
 
 function isTrustedLocalRequest(request: IncomingMessage): boolean {
