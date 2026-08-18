@@ -12,7 +12,7 @@ import { registerTools, type BridgePolicy } from "./register-tools.js";
 type JsonObject = Record<string, unknown>;
 
 export interface BridgeServices {
-  tandem: {
+  browser: {
     health(): Promise<JsonObject>;
     tabs(): Promise<{ tabs: JsonObject[]; groups: JsonObject[] }>;
     open(url: string, focus?: boolean): Promise<JsonObject>;
@@ -104,9 +104,14 @@ let healthRefresh: Promise<void> | undefined;
 const HEALTH_TTL_MS = 3_000;
 
 function computeHealth(services: BridgeServices): Promise<Record<string, unknown>> {
-  return Promise.allSettled([services.tandem.health(), services.cua.status(), services.cua.permissions()]).then(([tandem, cua, permissions]) => {
-    const browser = tandem.status === "fulfilled";
-    return { bridge: true, browser, tandem: browser, cua: cua.status === "fulfilled", permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true };
+  return Promise.allSettled([services.browser.health(), services.cua.status(), services.cua.permissions()]).then(([browser, cua, permissions]) => {
+    const browserOk = browser.status === "fulfilled";
+    return {
+      bridge: true,
+      browser: browserOk,
+      cua: cua.status === "fulfilled",
+      permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true,
+    };
   });
 }
 
@@ -129,7 +134,7 @@ async function serveHealth(services: BridgeServices, response: ServerResponse): 
   await healthRefresh;
   const refreshed = healthCache as { at: number; payload: Record<string, unknown> } | undefined;
   response.writeHead(200, { "content-type": "application/json" });
-  response.end(JSON.stringify(refreshed?.payload ?? { bridge: true, browser: false, tandem: false, cua: false, permissions: false }));
+  response.end(JSON.stringify(refreshed?.payload ?? { bridge: true, browser: false, cua: false, permissions: false }));
 }
 
 function isTrustedLocalRequest(request: IncomingMessage): boolean {

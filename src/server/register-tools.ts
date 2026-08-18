@@ -22,7 +22,7 @@ export function registerTools(
 
   server.registerTool("frobb_health", {
     title: "Check Frobb readiness",
-    description: "Check whether the Frobb Bridge, Tandem Browser, Cua Driver, and macOS permissions are ready.",
+    description: "Check whether the Frobb Bridge, dedicated Chrome profile, Cua Driver, and macOS permissions are ready.",
     inputSchema: schemas.emptyInput,
     outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
@@ -35,17 +35,17 @@ export function registerTools(
     outputSchema: schemas.commonOutput,
     annotations: readOnlyAnnotations(),
   }, audited(audit, "browser_tabs", "browser", async () => {
-    const data = await withReadRetry(() => services.tandem.tabs());
+    const data = await withReadRetry(() => services.browser.tabs());
     return result(data, `Found ${data.tabs.length} Frobb Chrome tab${data.tabs.length === 1 ? "" : "s"}.`);
   }));
 
   server.registerTool("browser_open", {
-    title: "Open in Tandem",
+    title: "Open URL in Frobb Chrome",
     description: "Open a URL in the dedicated Frobb Chrome profile. This does not submit, purchase, publish, delete, or send anything.",
     inputSchema: schemas.browserOpenInput,
     outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(true),
-  }, audited(audit, "browser_open", "browser", async ({ url, focus }) => result(await services.tandem.open(url, focus), "Opened the URL in Tandem Browser.")));
+  }, audited(audit, "browser_open", "browser", async ({ url, focus }) => result(await services.browser.open(url, focus), "Opened the URL in Frobb Chrome.")));
 
   server.registerTool("browser_observe", {
     title: "Observe browser page",
@@ -55,11 +55,11 @@ export function registerTools(
     annotations: readOnlyAnnotations(),
   }, audited(audit, "browser_observe", "browser", async ({ tabId }) => {
     const target = browserTarget(tabId);
-    const observed = await coordinator.observe("tandem", target, async () => {
-      const data = await withReadRetry(() => services.tandem.snapshot(tabId));
+    const observed = await coordinator.observe("chrome", target, async () => {
+      const data = await withReadRetry(() => services.browser.snapshot(tabId));
       return { revision: revision(data), data };
     });
-    return result(observed, "Observed the current Tandem page. Use this observation once and promptly.");
+    return result(observed, "Observed the current Frobb Chrome page. Use this observation once and promptly.");
   }));
 
   server.registerTool("browser_click", {
@@ -80,17 +80,17 @@ export function registerTools(
 
   server.registerTool("browser_scroll", {
     title: "Scroll browser page",
-    description: "Scroll a Tandem page from a fresh observation and verify the resulting page state.",
+    description: "Scroll a Frobb Chrome page from a fresh observation and verify the resulting page state.",
     inputSchema: schemas.browserScrollInput,
     outputSchema: schemas.commonOutput,
     annotations: reversibleAnnotations(true),
   }, audited(audit, "browser_scroll", "browser", async ({ observationId, tabId, direction, amount }) => {
     const target = browserTarget(tabId);
-    const data = await coordinator.act({ observationId, backend: "tandem", target, action: () => services.tandem.scroll(tabId, direction, amount), refresh: () => browserSnapshot(services, tabId), verify: async () => {
-      const snapshot = await services.tandem.snapshot(tabId);
+    const data = await coordinator.act({ observationId, backend: "chrome", target, action: () => services.browser.scroll(tabId, direction, amount), refresh: () => browserSnapshot(services, tabId), verify: async () => {
+      const snapshot = await services.browser.snapshot(tabId);
       return { revision: revision(snapshot), data: snapshot };
     } });
-    return result(data, "Scrolled and verified the Tandem page.");
+    return result(data, "Scrolled and verified the Frobb Chrome page.");
   }));
 
   server.registerTool("computer_apps", {
@@ -190,17 +190,17 @@ export function registerTools(
 
 async function browserClick(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string }, confirmed = false) {
   const target = browserTarget(args.tabId);
-  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.click(args.tabId, args.ref, confirmed), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
-    const snapshot = await services.tandem.snapshot(args.tabId);
+  const data = await coordinator.act({ observationId: args.observationId, backend: "chrome", target, action: () => services.browser.click(args.tabId, args.ref, confirmed), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
+    const snapshot = await services.browser.snapshot(args.tabId);
     return { revision: revision(snapshot), data: snapshot };
   } });
-  return result(data, "Clicked and verified the Tandem element.");
+  return result(data, "Clicked and verified the Frobb Chrome element.");
 }
 
 async function browserType(services: BridgeServices, coordinator: ActionCoordinator, args: { observationId: string; tabId?: string | undefined; ref: string; text: string }, confirmed = false) {
   const target = browserTarget(args.tabId);
-  const data = await coordinator.act({ observationId: args.observationId, backend: "tandem", target, action: () => services.tandem.type(args.tabId, args.ref, args.text, confirmed), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
-    const snapshot = await services.tandem.snapshot(args.tabId);
+  const data = await coordinator.act({ observationId: args.observationId, backend: "chrome", target, action: () => services.browser.type(args.tabId, args.ref, args.text, confirmed), refresh: () => browserSnapshot(services, args.tabId), verify: async () => {
+    const snapshot = await services.browser.snapshot(args.tabId);
     return { revision: revision(snapshot), data: { count: snapshot.count, url: snapshot.url } };
   } });
   return result({ verified: data.verified, beforeRevision: data.beforeRevision, afterRevision: data.afterRevision }, "Typed and verified without returning the entered text.");
@@ -226,9 +226,14 @@ async function computerType(services: BridgeServices, coordinator: ActionCoordin
 }
 
 async function health(services: BridgeServices): Promise<Record<string, boolean>> {
-  const [tandem, cua, permissions] = await Promise.allSettled([services.tandem.health(), services.cua.status(), services.cua.permissions()]);
-  const browser = tandem.status === "fulfilled";
-  return { bridge: true, browser, tandem: browser, cua: cua.status === "fulfilled", permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true };
+  const [browser, cua, permissions] = await Promise.allSettled([services.browser.health(), services.cua.status(), services.cua.permissions()]);
+  const browserOk = browser.status === "fulfilled";
+  return {
+    bridge: true,
+    browser: browserOk,
+    cua: cua.status === "fulfilled",
+    permissions: permissions.status === "fulfilled" && permissions.value.accessibility === true && permissions.value.screen_recording === true,
+  };
 }
 
 function result(data: Record<string, unknown>, text: string) {
@@ -293,7 +298,7 @@ function computerTarget(pid: number, windowId: number): string { return `${pid}:
 function revision(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 
 async function browserSnapshot(services: BridgeServices, tabId?: string) {
-  const data = await withReadRetry(() => services.tandem.snapshot(tabId));
+  const data = await withReadRetry(() => services.browser.snapshot(tabId));
   return { revision: revision(data), data };
 }
 
