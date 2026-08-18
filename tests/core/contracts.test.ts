@@ -7,7 +7,7 @@ describe("core contracts", () => {
     expect(
       isObservationHandle({
         id: "o1",
-        backend: "tandem",
+        backend: "chrome",
         target: "tab:1",
         createdAt: 1,
         expiresAt: 2,
@@ -17,9 +17,9 @@ describe("core contracts", () => {
   });
 
   it("serializes stable bridge errors", () => {
-    expect(new BridgeError("BACKEND_OFFLINE", "Tandem is offline").toJSON()).toEqual({
+    expect(new BridgeError("BACKEND_OFFLINE", "Chrome is offline").toJSON()).toEqual({
       code: "BACKEND_OFFLINE",
-      message: "Tandem is offline",
+      message: "Chrome is offline",
       retryable: true,
     });
   });

@@ -115,7 +115,7 @@ async function connect(services: BridgeServices): Promise<Client> {
 
 function createFakeServices(): BridgeServices {
   return {
-    tandem: {
+    browser: {
       health: async () => ({ ready: true }),
       tabs: async () => ({ tabs: [{ id: "tab-1", title: "Frobb" }], groups: [] }),
       open: async () => ({ ok: true, tab: { id: "tab-2" } }),

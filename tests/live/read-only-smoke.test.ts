@@ -11,16 +11,16 @@ import { loadConfig } from "../../src/setup/config.js";
 describe.skipIf(process.env.FROBB_LIVE_TEST !== "1")("read-only live smoke", () => {
   it("observes the dedicated Frobb Chrome profile without acting", async () => {
     const manager = new ChromeManager(await loadConfig());
-    const tandem = new ChromeAdapter({ backend: new ChromeCdpBackend(manager) });
+    const browser = new ChromeAdapter({ backend: new ChromeCdpBackend(manager) });
     const cua = new CuaAdapter();
-    const server = createBridgeServer({ tandem, cua }, { observations: new ObservationStore(), confirmations: new ConfirmationStore(), audit: new AuditLogger(() => undefined) });
+    const server = createBridgeServer({ browser, cua }, { observations: new ObservationStore(), confirmations: new ConfirmationStore(), audit: new AuditLogger(() => undefined) });
 
-    const status = await tandem.health();
-    const tabs = await tandem.tabs();
+    const status = await browser.health();
+    const tabs = await browser.tabs();
     expect(server).toBeDefined();
     expect(status).toBeTypeOf("object");
     expect(tabs.tabs).toBeInstanceOf(Array);
-    if (tabs.tabs.length > 0) expect(await tandem.snapshot(String(tabs.tabs[0]?.id))).toBeTypeOf("object");
+    if (tabs.tabs.length > 0) expect(await browser.snapshot(String(tabs.tabs[0]?.id))).toBeTypeOf("object");
     try {
       const cuaStatus = await cua.status();
       const apps = await cua.listApps();

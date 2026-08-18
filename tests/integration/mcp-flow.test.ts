@@ -43,9 +43,9 @@ it("observes, acts, and verifies a browser change through MCP", async () => {
   }
 });
 
-function createServices(tandemOverrides: Partial<BridgeServices["tandem"]>): BridgeServices {
+function createServices(browserOverrides: Partial<BridgeServices["browser"]>): BridgeServices {
   return {
-    tandem: {
+    browser: {
       health: async () => ({ ready: true }),
       tabs: async () => ({ tabs: [], groups: [] }),
       open: async () => ({ ok: true }),
@@ -53,7 +53,7 @@ function createServices(tandemOverrides: Partial<BridgeServices["tandem"]>): Bri
       click: async () => ({ ok: true }),
       type: async () => ({ ok: true }),
       scroll: async () => ({ ok: true }),
-      ...tandemOverrides,
+      ...browserOverrides,
     },
     cua: {
       status: async () => ({ running: true }),

@@ -29,10 +29,10 @@ describe("bridge policy", () => {
 
   it("expires an observation after one use", () => {
     const store = new ObservationStore({ now: () => 1_000, ttlMs: 30_000 });
-    const handle = store.issue("tandem", "tab:1", "rev");
+    const handle = store.issue("chrome", "tab:1", "rev");
 
-    expect(store.consume(handle.id, "tandem", "tab:1")).toEqual(handle);
-    expect(() => store.consume(handle.id, "tandem", "tab:1")).toThrowError(
+    expect(store.consume(handle.id, "chrome", "tab:1")).toEqual(handle);
+    expect(() => store.consume(handle.id, "chrome", "tab:1")).toThrowError(
       expect.objectContaining({ code: "STALE_OBSERVATION" }),
     );
   });

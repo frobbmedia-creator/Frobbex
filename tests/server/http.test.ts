@@ -26,7 +26,7 @@ describe("Frobb HTTP app", () => {
     const response = await fetch(`http://127.0.0.1:${address.port}/health`);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ bridge: true, browser: true, tandem: true, cua: true, permissions: true });
+    expect(await response.json()).toEqual({ bridge: true, browser: true, cua: true, permissions: true });
 
     const rejected = await fetch(`http://127.0.0.1:${address.port}/health`, { headers: { Origin: "https://evil.example" } });
     expect(rejected.status).toBe(403);
@@ -40,7 +40,7 @@ describe("Frobb HTTP app", () => {
 
 function createServices(): BridgeServices {
   return {
-    tandem: {
+    browser: {
       health: async () => ({ ready: true }),
       tabs: async () => ({ tabs: [], groups: [] }),
       open: async () => ({ ok: true }),

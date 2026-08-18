@@ -7,7 +7,7 @@ describe("ActionCoordinator", () => {
   it("requires an observation, performs one action, and verifies afterward", async () => {
     const store = new ObservationStore({ now: () => 1_000, ttlMs: 30_000 });
     const coordinator = new ActionCoordinator(store);
-    const observed = await coordinator.observe("tandem", "tab:1", async () => ({
+    const observed = await coordinator.observe("chrome", "tab:1", async () => ({
       revision: "before",
       data: { snapshot: "button @e1" },
     }));
@@ -15,7 +15,7 @@ describe("ActionCoordinator", () => {
 
     const result = await coordinator.act({
       observationId: observed.observation.id,
-      backend: "tandem",
+      backend: "chrome",
       target: "tab:1",
       action: async () => {
         actions += 1;
@@ -48,7 +48,7 @@ describe("ActionCoordinator", () => {
     let now = 1_000;
     const store = new ObservationStore({ now: () => now, ttlMs: 10 });
     const coordinator = new ActionCoordinator(store);
-    const observed = await coordinator.observe("tandem", "tab:1", async () => ({
+    const observed = await coordinator.observe("chrome", "tab:1", async () => ({
       revision: "old",
       data: { snapshot: "old" },
     }));
@@ -59,7 +59,7 @@ describe("ActionCoordinator", () => {
     await expect(
       coordinator.act({
         observationId: observed.observation.id,
-        backend: "tandem",
+        backend: "chrome",
         target: "tab:1",
         action: async () => {
           actions += 1;
@@ -87,12 +87,12 @@ describe("ActionCoordinator", () => {
   it("rejects a target that changed after observation before acting", async () => {
     const store = new ObservationStore({ now: () => 1_000 });
     const coordinator = new ActionCoordinator(store);
-    const observed = await coordinator.observe("tandem", "tab:1", async () => ({ revision: "before", data: {} }));
+    const observed = await coordinator.observe("chrome", "tab:1", async () => ({ revision: "before", data: {} }));
     let actions = 0;
 
     await expect(coordinator.act({
       observationId: observed.observation.id,
-      backend: "tandem",
+      backend: "chrome",
       target: "tab:1",
       refresh: async () => ({ revision: "changed", data: { url: "https://changed.example" } }),
       action: async () => { actions += 1; return {}; },
