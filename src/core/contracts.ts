@@ -1,4 +1,4 @@
-export type Backend = "tandem" | "cua";
+export type Backend = "chrome" | "cua";
 
 export type ActionRisk = "observe" | "reversible" | "consequential";
 
@@ -36,7 +36,7 @@ export function isObservationHandle(value: unknown): value is ObservationHandle 
   const candidate = value as Record<string, unknown>;
   return (
     typeof candidate.id === "string" &&
-    (candidate.backend === "tandem" || candidate.backend === "cua") &&
+    (candidate.backend === "chrome" || candidate.backend === "cua") &&
     typeof candidate.target === "string" &&
     typeof candidate.createdAt === "number" &&
     typeof candidate.expiresAt === "number" &&

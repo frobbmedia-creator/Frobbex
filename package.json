@@ -1,6 +1,7 @@
 {
   "name": "@frobb-media/bridge",
   "version": "0.1.0",
+  "description": "Local MCP bridge for ChatGPT computer use — dedicated Chrome profile + macOS native control",
   "private": true,
   "type": "module",
   "engines": {

@@ -15,7 +15,7 @@ export async function startBridge(): Promise<ReturnType<typeof createServer>> {
   assertLoopbackHost(config.host);
   const manager = new ChromeManager(config);
   const chrome = new ChromeAdapter({ backend: new ChromeCdpBackend(manager) });
-  const server = createServer(createHttpApp({ tandem: chrome, cua: new CuaAdapter() }));
+  const server = createServer(createHttpApp({ browser: chrome, cua: new CuaAdapter() }));
   server.on("close", () => { void manager.close(); });
   return server.listen(port, config.host, () => process.stderr.write(`Frobb Bridge listening on http://${config.host}:${port}/mcp\n`));
 }
